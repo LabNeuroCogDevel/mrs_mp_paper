@@ -11,20 +11,21 @@ library(RColorBrewer)
 library(data.table)
 library(missMDA)
 library(FactoMineR)
+library(tidyr)
 
 #### Get data and remove bad quality data ####
-MRS <- read.csv("/Users/mariaperica/Desktop/Lab/Projects/2020_MRSMGS/13MP20200207_LCMv2fixidx.csv")
+MRS_all <- read.csv("data/13MP20200207_LCMv2fixidx.csv")
 
 # Step 1 Outlier Detection - visual inspection of LCModel fits/spectra
 # create a list of who to remove and remove them
-lcm <- read_excel("/Users/mariaperica/Desktop/Lab/Projects/2020_MRSMGS/lcm.xlsx", col_names = FALSE)
-lcm <- separate(lcm, "...1", c("ld8", "junk","y","x"),extra="merge", sep = "[-.]")
-lcm <- select(lcm, -junk)
-lcm$bad <- TRUE
-MRS <- MRS %>% mutate(x=216+1-x,y=216+1-y)
-MRS <- merge(MRS, lcm, by=c("ld8", "x", "y"), all=T) 
-MRS <- filter(MRS, is.na(bad))
-MRS <- select(MRS, -bad)
+lcm_qa <- read.table("data/lcm_bad_visual_qc.txt",header=FALSE) %>%
+       separate(lcm, "V1", c("ld8", "junk","y","x"),extra="merge", sep = "[-.]") %>%
+       select(lcm, -junk) %>%
+       mutate(bad=TRUE)
+MRS <- MRS %>% mutate(x=216+1-x,y=216+1-y) %>%
+   merge(lcm_qa, by=c("ld8", "x", "y"), all=T)  %>%
+   filter(MRS, is.na(bad)) %>%
+   select(MRS, -bad)
 
 #keep only visit 1 people
 MRS <- MRS %>% filter(visitnum==1)
