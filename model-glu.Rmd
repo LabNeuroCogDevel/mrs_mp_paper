@@ -1,0 +1,55 @@
+<!-- GLOBALS:
+  MRS    -- cleaned data with invage
+  zthres -- probably =2
+-->
+
+```{r}
+MRS_glu <- MRS %>% filter(Glu.SD <=20)
+
+# ROI 1 (R Anterior Insula) and 2 (L Anterior Insula)
+
+ROI12_Glu <- MRS_glu %>% filter(roi == 1 | roi == 2)
+ROI12_Glu <- ROI12_Glu%>%
+  mutate(zscore_glu=scale(Glu.Cr), zscore_invage=scale(invage), zscore_gm=scale(GMrat))
+ROI12_Glu <- ROI12_Glu %>% 
+  filter(abs(zscore_glu) <= z_thres)
+
+#ROI12_Glu %>% select(ld8, label) %>% spread(label, -ld8)
+
+# pick best model
+ROI12_Glu_age <- lmer(data=ROI12_Glu, Glu.Cr ~ age + label + sex + GMrat + (1|ld8))
+summary(ROI12_Glu_age)
+ROI12_Glu_invage <- lmer(data=ROI12_Glu, Glu.Cr ~ invage + label + sex + GMrat + (1|ld8))
+summary(ROI12_Glu_invage) 
+ROI12_Glu_quadage <- lmer(data=ROI12_Glu, Glu.Cr ~ age + age2 + label + sex + GMrat + (1|ld8))
+summary(ROI12_Glu_quadage) 
+
+AIC(ROI12_Glu_age)
+AIC(ROI12_Glu_invage) # best fit by a lot
+AIC(ROI12_Glu_quadage)
+
+```
+
+#### effect sizes
+```{r}
+ROI12_zGlu <- lmer(data=ROI12_Glu, zscore_glu ~ zscore_invage + label + (1|ld8))
+summary(ROI12_zGlu) # just glu ~ age effect
+
+ROI12_zGlu_invage <- lmer(data=ROI12_Glu, zscore_glu ~ zscore_invage + label + sex + zscore_gm + (1|ld8))
+summary(ROI12_zGlu_invage) # all covariates for table
+summary(ROI12_zGlu_invage)$coefficients
+```
+
+#### test for interactions w/ age
+```{r glu-1-2-lm}
+ROI12_Glu_hemi_int <- lmer(data=ROI12_Glu, Glu.Cr ~ invage * label + sex + GMrat + (1|ld8))
+summary(ROI12_Glu_hemi_int) 
+ROI12_Glu_sex_int <- lmer(data=ROI12_Glu, Glu.Cr ~ invage * sex + label + GMrat + (1|ld8))
+summary(ROI12_Glu_sex_int) 
+ROI12_Glu_gmrat_int <- lmer(data=ROI12_Glu, Glu.Cr ~ invage * GMrat + sex + label + (1|ld8))
+summary(ROI12_Glu_gmrat_int) 
+
+ggplot(ROI12_Glu, aes(x=age, y=Glu.SD)) + geom_point() + geom_smooth(method="lm") + theme_classic()
+aiglusd_age <- lmer(data=ROI12_Glu, scale(Glu.SD) ~ scale(age) +(1|ld8))
+summary(aiglusd_age)
+```

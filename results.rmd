@@ -1,0 +1,87 @@
+---
+title: MRSI
+output: rmarkdown::github_document
+---
+<!-- RENDER:
+  rstudio: ctrl+shift+k (or play icon)
+  emacs: polymode, poly-r, ess: M-n w (poly-weave)
+  R: rmarkdown::render("results.rmd")
+-->
+
+```{r, echo = FALSE}
+# require rmarkdown for sweave/knittr
+knitr::opts_chunk$set(fig.path = "figs/")
+require(dplyr)
+require(tidyr)
+require(glue)
+require(ggplot2)
+require(lme4)
+source('funcs.R')
+```
+# MRSI
+9x9x10mm voxel position interactively for all regions of interest. Voxel metabolite concentrations estimated by LCModel.
+
+## Input
+ * metabolite concentration per voxel from `data/13MP20200207_LCMv2fixidx.csv`.
+ * Spectrum that failed visual inspection annotated in `data/lcm_bad_visual_qc.txt`.
+
+```{r, echo=FALSE}
+system("wc -l data/* |sed '$d'", intern=T) %>% paste(collapse="\n") %>% cat
+```
+
+### limiting
+
+We exclude spectrum that failed visual inspection, extranous data (non-ROI voxels), poor model fit (high "SD")
+
+```{r, echo=FALSE}
+
+MRS_all     <- read_mrsi_roi()
+MRS_qc      <- remove_bad_qc(MRS_all)
+MRS_visit1  <- visit1_and_data(MRS_qc)
+MRS_cleaned <- remove_major_met_outliers(MRS_visit1)
+
+
+quick_info <- function(d, stage=NULL)
+    data.frame(nsubj=length(unique(gsub('_.*','',d$ld8))),
+               nvisits=length(unique(d$ld8)), 
+               nrow=nrow(d))
+exclusion_df <- list(all=MRS_all, "visual qc"=MRS_qc, "visit1 only"=MRS_visit1, "rm SD outlier"=MRS_cleaned) %>%
+    lapply(quick_info) %>%
+    bind_rows(., .id="stage")
+
+knitr::kable(exclusion_df)
+
+# better as a table
+#exclusion_df %>% gather(of,n,-stage) %>%
+#    ggplot() + aes(x=stage, y=n, color=of) +
+#    geom_point() + facet_grid(of~., scales="free_y") + cowplot::theme_cowplot()
+```
+### Demographics
+```{r age-distribution}
+id_summary <- MRS_cleaned %>% group_by(ld8,age,sex) %>% tally # n=number of ROIs, ignored
+ggplot(id_summary, aes(x=age, fill=sex)) +
+    geom_histogram(color="black", binwidth = 1) +
+    theme_classic(base_size = 15) +
+    xlab("Age (years)") + ylab("Count") + labs(fill = "Sex") + 
+    ggtitle("Age Distribution")
+```
+
+
+### inverse and quadratic age
+Though using linear models, we can model inverse or quadratic chanes in age.
+```r
+MRS <- add_inv_and_quad_age(MRS_cleaned)
+```
+
+## Models
+One outlier removal strategy is to remove metabolite concentrations that are 2 standard deviations from the mean.
+Another is to remove poor model fit. For most metabolites this is a CRLB ("SD") above `20`. Model input will not include these outlier values. 
+```{r}
+z_thres <- 2
+```
+
+
+### Glu
+```{r child= 'model-glu.Rmd'}
+```
+
