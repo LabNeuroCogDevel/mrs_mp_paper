@@ -11,46 +11,15 @@ library(RColorBrewer)
 library(data.table)
 library(missMDA)
 library(FactoMineR)
+library(dplyr)
 library(tidyr)
 
-#### Get data and remove bad quality data ####
-MRS_all <- read.csv("data/13MP20200207_LCMv2fixidx.csv")
+MRS <- read_mrsi_roi()
+MRS <- remove_bad_qc(MRS)
+MRS <- visit1_and_data(MRS)
+MRS <- remove_major_met_outliers(MRS)
+MRS <- add_inv_and_quad_age(MRS)
 
-# Step 1 Outlier Detection - visual inspection of LCModel fits/spectra
-# create a list of who to remove and remove them
-lcm_qa <- read.table("data/lcm_bad_visual_qc.txt",header=FALSE) %>%
-       separate(lcm, "V1", c("ld8", "junk","y","x"),extra="merge", sep = "[-.]") %>%
-       select(lcm, -junk) %>%
-       mutate(bad=TRUE)
-MRS <- MRS %>% mutate(x=216+1-x,y=216+1-y) %>%
-   merge(lcm_qa, by=c("ld8", "x", "y"), all=T)  %>%
-   filter(MRS, is.na(bad)) %>%
-   select(MRS, -bad)
-
-#keep only visit 1 people
-MRS <- MRS %>% filter(visitnum==1)
-#keep people's correct coordinates
-MRS <- MRS %>% filter(!is.na(roi))
-#get rid of people who are actually visit 2 but for some reason aren't filtered out
-MRS <- MRS %>% filter(ld8!="10195_20191205")
-
-# get rid of junk data noticed recently 
-MRS<- MRS %>% filter(Glu.Cr != 0)
-
-# save out a dataframe to share data after this step
-
-# Step 2 Outlier Detection - get rid of peole who have bad data for 3 major metabolite peaks - GPC+Cho, NAA+NAAG, Cr
-MRS<- filter(MRS, GPC.Cho.SD <= 10 | is.na(GPC.Cho.SD))
-MRS <- filter(MRS, NAA.NAAG.SD <= 10 | is.na(NAA.NAAG.SD))
-MRS <- filter(MRS, Cr.SD <= 10 | is.na(Cr.SD))
-
-# Step 3 Outlier Detection - get rid of people who have lots of macromolecule in their spectra, as that can create distortions
-MRS <- filter(MRS, MM20.Cr <= 3 | is.na(MM20.Cr))
-
-#make inverse age column
-MRS$invage <- 1/MRS$age
-#make age^2 column
-MRS$age2 <- (MRS$age - mean(MRS$age))^2
 
 z_thres = 2
 
